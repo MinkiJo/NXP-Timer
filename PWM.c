@@ -1,0 +1,78 @@
+/*
+ * main implementation: use this 'C' sample to create your own application
+ *
+ */
+#include "S32K144.h"
+#include "device_registers.h"
+
+void SOSC_init_8Mhz(void){
+   SCG->SOSCDIV = SCG_SOSCDIV_SOSCDIV1(1)|SCG_SOSCDIV_SOSCDIV2(1);
+
+   SCG->SOSCCFG = SCG_SOSCCFG_RANGE(2)|SCG_SOSCCFG_EREFS_MASK;
+
+   while(SCG->SOSCCSR & SCG_SOSCCSR_LK_MASK);
+   SCG->SOSCCSR = SCG_SOSCCSR_SOSCEN_MASK;
+
+   while(!(SCG->SOSCCSR & SCG_SOSCCSR_SOSCVLD_MASK));
+}
+
+void SPLL_init_160Mhz(void){
+   while(SCG->SPLLCSR & SCG_SPLLCSR_LK_MASK);
+   SCG->SPLLCSR &= ~SCG_SPLLCSR_SPLLEN_MASK;
+
+   SCG->SPLLDIV |= SCG_SPLLDIV_SPLLDIV1(2)|SCG_SPLLDIV_SPLLDIV2(3);
+   SCG->SPLLCFG = SCG_SPLLCFG_MULT(24);
+
+   while(SCG->SPLLCSR & SCG_SPLLCSR_LK_MASK);
+   SCG->SPLLCSR |= SCG_SPLLCSR_SPLLEN_MASK;
+
+   while(!(SCG->SPLLCSR & SCG_SPLLCSR_SPLLVLD_MASK));
+}
+
+void NormalRUNMode_80Mhz(void){
+   SCG->SIRCDIV = SCG_SIRCDIV_SIRCDIV1(1)|SCG_SIRCDIV_SIRCDIV2(1);
+
+   SCG->RCCR = SCG_RCCR_SCS(6)
+         |SCG_RCCR_DIVCORE(0b01)
+         |SCG_RCCR_DIVBUS(0b01)
+         |SCG_RCCR_DIVSLOW(0b10);
+
+   while(((SCG->CSR & SCG_CSR_SCS_MASK) >> SCG_CSR_SCS_SHIFT) != 6){}
+}
+void PORT_init(void){
+	PCC->PCCn[PCC_PORTD_INDEX] |= PCC_PCCn_CGC_MASK;
+	PORTD->PCR[16] |= PORT_PCR_MUX(2);
+}
+
+
+void FTM0_CH1_PWM(void){
+	PCC->PCCn[PCC_FTM0_INDEX] &= ~PCC_PCCn_CGC_MASK;
+	PCC->PCCn[PCC_FTM0_INDEX] |= PCC_PCCn_PCS(0b010)
+							| PCC_PCCn_CGC_MASK;
+
+	FTM0->SC = FTM_SC_PWMEN1_MASK
+			|FTM_SC_PS(1);
+
+	FTM0->MOD = 16000 - 1;
+
+	FTM0->CNTIN = FTM_CNTIN_INIT(0);
+
+	FTM0->CONTROLS[1].CnSC |= FTM_CnSC_MSB_MASK;
+	FTM0->CONTROLS[1].CnSC |= FTM_CnSC_ELSA_MASK;
+
+	FTM0->CONTROLS[1].CnV = 2048;
+	FTM0->SC |= FTM_SC_CLKS(3);
+}
+
+
+int main(void){
+	SOSC_init_8MHz();
+	SPLL_init_160MHz();
+	NormalRUNmode_80MHz();
+
+	FTM0_CH1_PWM();
+	PORT_init();
+	for(;;){
+
+	}
+}
