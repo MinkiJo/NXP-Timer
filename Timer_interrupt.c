@@ -1,0 +1,90 @@
+
+#include "S32K144.h"
+
+void SOSC_init_8MHz(void){
+	SCG->SOSCDIV=SCG_SOSCDIV_SOSCDIV1(1)|
+			SCG_SOSCDIV_SOSCDIV2(1);
+	SCG->SOSCCFG = SCG_SOSCCFG_RANGE(2)|
+			SCG_SOSCCFG_EREFS_MASK;
+
+	while(SCG->SOSCCSR&SCG_SOSCCSR_LK_MASK);
+	SCG->SOSCCSR=SCG_SOSCCSR_SOSCEN_MASK;
+
+	while(!(SCG->SOSCCSR & SCG_SOSCCSR_SOSCVLD_MASK));
+
+}
+
+void SPLL_init_160MHz(void){
+	while(SCG->SPLLCSR &SCG_SPLLCSR_LK_MASK);
+	SCG->SPLLCSR &= ~SCG_SPLLCSR_SPLLEN_MASK;
+	SCG->SPLLDIV |= SCG_SPLLDIV_SPLLDIV1(2)|
+			SCG_SPLLDIV_SPLLDIV2(3);
+	SCG->SPLLCFG = SCG_SPLLCFG_MULT(24);
+
+	while(SCG->SPLLCSR & SCG_SPLLCSR_LK_MASK);
+	SCG->SPLLCSR |=SCG_SPLLCSR_SPLLEN_MASK;
+
+	while(!(SCG->SPLLCSR &SCG_SPLLCSR_SPLLVLD_MASK));
+}
+
+
+void NormalRUNmode_80MHz(void){
+	SCG->SIRCDIV = SCG_SIRCDIV_SIRCDIV1(1)
+			| SCG_SIRCDIV_SIRCDIV2(1);
+
+	SCG->RCCR=SCG_RCCR_SCS(6)
+			|SCG_RCCR_DIVCORE(0b01)
+			|SCG_RCCR_DIVBUS(0b01)
+			|SCG_RCCR_DIVSLOW(0b10);
+
+	while(((SCG->CSR & SCG_CSR_SCS_MASK) >>SCG_CSR_SCS_SHIFT) != 6){}
+}
+
+void NVIC_init_IRQs(void){
+	S32_NVIC->ICPR[1] |= 1 << (48 % 32);
+	S32_NVIC->ISER[1] |= 1 << (48 % 32);
+	S32_NVIC->IP[48] = 0xA;
+
+}
+
+void LPIT0_init(void){
+	PCC->PCCn[PCC_LPIT_INDEX] &= ~PCC_PCCn_PCS_MASK;
+	PCC->PCCn[PCC_LPIT_INDEX]|=PCC_PCCn_PCS(6);
+	PCC->PCCn[PCC_LPIT_INDEX] |= PCC_PCCn_CGC_MASK;
+
+	LPIT0->MCR |= LPIT_MCR_M_CEN_MASK;
+
+	LPIT0->MIER |=LPIT_MIER_TIE0_MASK;
+	LPIT0->TMR[0].TVAL =40000000;
+	LPIT0->TMR[0].TCTRL |=LPIT_TMR_TCTRL_T_EN_MASK;
+}
+
+void PORT_init(void){
+	PCC->PCCn[PCC_PORTD_INDEX] |=PCC_PCCn_CGC_MASK;
+	PORTD->PCR[0]&=~PORT_PCR_MUX_MASK;
+	PORTD->PCR[0] |= PORT_PCR_MUX(1);
+	PTD->PDDR |=1<<0;
+}
+
+int idle_counter = 0;
+int lpit0_ch0_flag_counter = 0;
+
+int main(void){
+	PORT_init();
+	SOSC_init_8MHz();
+	SPLL_init_160MHz();
+	NormalRUNmode_80MHz();
+	NVIC_init_IRQs();
+	LPIT0_init();
+	for(;;){
+		idle_counter++;
+	}
+}
+
+void LPIT0_Ch0_IRQHandler(void){
+	lpit0_ch0_flag_counter++;
+	PTD->PTOR |=1<<0;
+	LPIT0->MSR |= LPIT_MSR_TIF0_MASK;
+}
+
+
